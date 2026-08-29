@@ -2,6 +2,10 @@ feedparser>=6.0.11
 PyYAML>=6.0.2
 requests>=2.32.0
 python-dotenv>=1.0.1
+<<<<<<< HEAD
 google-genai>=1.0.0
+=======
+openai>=1.99.0
+>>>>>>> 1bb262fe1f566ac7525c703936945d74ba5484e5
 beautifulsoup4>=4.12.3
 rapidfuzz>=3.13.0
