@@ -19,7 +19,7 @@ def run(slot, dry_run=False):
 
     events = [event_from_article(a, company_map) for a in articles]
     events = filter_new(events)
-    events = enrich(events, cfg["openai"] if cfg["enable_openai"] else "", company_map)
+    events = enrich(events, cfg["gemini"] if cfg["enable_gemini"] else "", company_map)
     selected = rank(events, cfg["min_impact"], cfg["min_relevance"], cfg["max_alerts"])
 
     text = format_alert(selected, slot)
