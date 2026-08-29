@@ -27,12 +27,12 @@ The first version is deliberately provider-agnostic where possible:
 2. Normalization and deduplication.
 3. Keyword/entity detection.
 4. Rule-based impact/relevance scoring.
-5. Optional Gemini enrichment for stronger classification and stock mapping.
+5. Optional OpenAI enrichment for stronger classification and stock mapping.
 6. Top-10 selection.
 7. WhatsApp primary + Telegram fallback.
 8. JSON history/state.
 
-The Gemini step is optional. Set `GEMINI_API_KEY` to enable it.
+The OpenAI step is optional. Set `OPENAI_API_KEY` to enable it.
 
 ## Setup
 
@@ -84,7 +84,7 @@ python -m src.news_agent.main --slot 20:00
 
 Add only the credentials you need:
 
-- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `WHATSAPP_ACCESS_TOKEN`
