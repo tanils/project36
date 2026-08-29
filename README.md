@@ -143,3 +143,13 @@ The agent is an information-ranking system, not an investment adviser. Scores ar
 - Outcome tracking at 30m/1d/3d/5d/10d/20d.
 - Backtesting.
 - Calibrated scoring based on observed outcomes.
+
+
+## Authentication notes
+
+This version sends `GEMINI_API_KEY` explicitly using Google's `x-goog-api-key`
+header. It does not use OAuth bearer authentication. The Gemini model can be
+overridden with `GEMINI_MODEL` (default: `gemini-3.7-flash`).
+
+The GitHub Actions workflow also prints only whether the three required secrets
+are present; it never prints their values.

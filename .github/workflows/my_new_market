@@ -1,4 +1,4 @@
-name: Market News Intelligence
+name: Market News Intelligence_NEW
 
 on:
   workflow_dispatch:
@@ -36,13 +36,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          ENABLE_GEMINI: "true"
-          ENABLE_TELEGRAM: "true"
         run: |
-          echo "Credential presence check (values are never printed):"
-          if [ -n "$GEMINI_API_KEY" ]; then echo "GEMINI_API_KEY: present"; else echo "GEMINI_API_KEY: MISSING"; fi
-          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then echo "TELEGRAM_BOT_TOKEN: present"; else echo "TELEGRAM_BOT_TOKEN: MISSING"; fi
-          if [ -n "$TELEGRAM_CHAT_ID" ]; then echo "TELEGRAM_CHAT_ID: present"; else echo "TELEGRAM_CHAT_ID: MISSING"; fi
           if [ -n "${{ github.event.inputs.slot }}" ]; then
             SLOT="${{ github.event.inputs.slot }}"
           else
