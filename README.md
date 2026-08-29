@@ -153,3 +153,16 @@ overridden with `GEMINI_MODEL` (default: `gemini-3.7-flash`).
 
 The GitHub Actions workflow also prints only whether the three required secrets
 are present; it never prints their values.
+
+
+## Gemini authentication diagnostics
+
+This version uses the Gemini REST Interactions API with the `x-goog-api-key` header. Google documents API-key authentication this way and recommends the Interactions API for new projects. The workflow runs a safe credential diagnostic before the news agent. It prints only the key length and an 8-character SHA-256 fingerprint; it never prints the key.
+
+Run locally:
+
+```bash
+python -m src.news_agent.diagnostics
+```
+
+If Gemini returns `401 ACCESS_TOKEN_TYPE_UNSUPPORTED` even though the key is present, create a fresh Gemini API key in Google AI Studio and replace the GitHub `GEMINI_API_KEY` secret. Do not use an OAuth access token or add `Bearer ` to the secret.
