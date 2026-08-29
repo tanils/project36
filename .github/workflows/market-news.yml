@@ -33,20 +33,9 @@ jobs:
 
       - name: Run market news agent
         env:
-<<<<<<< HEAD
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-=======
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
-          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
-          WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
-          WHATSAPP_TEMPLATE_NAME: ${{ secrets.WHATSAPP_TEMPLATE_NAME }}
-          WHATSAPP_TEMPLATE_LANGUAGE: ${{ secrets.WHATSAPP_TEMPLATE_LANGUAGE }}
->>>>>>> 1bb262fe1f566ac7525c703936945d74ba5484e5
         run: |
           if [ -n "${{ github.event.inputs.slot }}" ]; then
             SLOT="${{ github.event.inputs.slot }}"
