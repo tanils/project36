@@ -60,7 +60,37 @@ def _generate(api_key, prompt):
         json={
             "model": MODEL,
             "input": prompt,
-            "response_format": {"type": "json"},
+            "response_format": {
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "impact_score": {"type": "integer"},
+                        "trading_relevance": {"type": "integer"},
+                        "confidence": {"type": "integer"},
+                        "direction": {"type": "string"},
+                        "horizon": {"type": "string"},
+                        "category": {"type": "string"},
+                        "affected_stocks": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "affected_sectors": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "status": {"type": "string"},
+                        "why_it_matters": {"type": "string"}
+                    },
+                    "required": [
+                        "impact_score", "trading_relevance", "confidence",
+                        "direction", "horizon", "category",
+                        "affected_stocks", "affected_sectors",
+                        "status", "why_it_matters"
+                    ]
+                }
+            },
         },
         timeout=60,
     )
@@ -75,9 +105,10 @@ def _generate(api_key, prompt):
 
 def test_gemini(api_key):
     """Make one tiny authenticated request for setup verification."""
-    text = _generate(api_key, 'Return exactly this JSON and nothing else: {"ok":true}')
+    text = _generate(api_key, 'Return a valid stock-news enrichment JSON object. Use impact_score=1, trading_relevance=1, confidence=1, direction=UNKNOWN, horizon=UNKNOWN, category=general, affected_stocks=[], affected_sectors=[], status=TEST, why_it_matters=authentication test.')
     parsed = json.loads(text)
-    if parsed.get("ok") is not True:
+    required = {"impact_score", "trading_relevance", "confidence", "direction", "horizon", "category", "affected_stocks", "affected_sectors", "status", "why_it_matters"}
+    if not required.issubset(parsed):
         raise RuntimeError(f"Gemini test returned unexpected response: {text[:500]}")
     return True
 
