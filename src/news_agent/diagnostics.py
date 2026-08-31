@@ -1,43 +1,25 @@
-import os
-import requests
-from .ai import credential_fingerprint
-
+import os,sys,requests
+from .config import settings
+from .delivery import validate_telegram
 
 def main():
-    gemini = os.getenv('GEMINI_API_KEY', '')
-    model = os.getenv('GEMINI_MODEL', 'gemini-3.6-flash')
-    telegram_token = os.getenv('TELEGRAM_BOT_TOKEN', '')
-    telegram_chat = os.getenv('TELEGRAM_CHAT_ID', '')
-
-    print('=== Credential diagnostics ===')
-    print(f'GEMINI_API_KEY: {credential_fingerprint(gemini)}')
-    print(f'GEMINI_MODEL: {model}')
-    print(f'TELEGRAM_BOT_TOKEN: {"present" if telegram_token else "missing"}')
-    print(f'TELEGRAM_CHAT_ID: {"present" if telegram_chat else "missing"}')
-
-    if gemini:
+    cfg=settings(); errors=[]
+    for name in ("GEMINI_API_KEY","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID"):
+        if not os.getenv(name): errors.append(f"{name} is missing")
+        else: print(f"[OK] {name}: present")
+    if cfg.get("gemini"):
         try:
-            r = requests.get(
-                f'https://generativelanguage.googleapis.com/v1beta/models/{model}',
-                headers={'x-goog-api-key': gemini}, timeout=30)
-            r.raise_for_status()
-            methods = [x.lower() for x in r.json().get('supportedGenerationMethods', [])]
-            print(f'[OK] Gemini metadata access; generateContent supported: {"generatecontent" in methods}')
-        except Exception as exc:
-            print(f'[ERROR] Gemini metadata check failed: {exc}')
-    else:
-        print('[SKIP] Gemini check: key missing')
-
-    if telegram_token and telegram_chat:
-        try:
-            r = requests.get(f'https://api.telegram.org/bot{telegram_token}/getMe', timeout=20)
-            r.raise_for_status()
-            print('[OK] Telegram bot token test passed')
-        except Exception as exc:
-            print(f'[ERROR] Telegram bot token test failed: {exc}')
-    else:
-        print('[SKIP] Telegram test: credentials incomplete')
-
-
-if __name__ == '__main__':
-    main()
+            model=os.getenv("GEMINI_MODEL","gemini-3.6-flash")
+            r=requests.get(f"https://generativelanguage.googleapis.com/v1beta/models/{model}",headers={"x-goog-api-key":cfg['gemini']},timeout=20)
+            print(f"[INFO] Gemini metadata HTTP: {r.status_code}")
+            if not r.ok: errors.append(f"Gemini metadata HTTP {r.status_code}: {r.text[:500]}")
+        except Exception as e: errors.append(f"Gemini metadata error: {e}")
+    if cfg.get("telegram_token") and cfg.get("telegram_chat_id"):
+        try: validate_telegram(cfg['telegram_token'],str(cfg['telegram_chat_id']).split(',')[0].strip())
+        except Exception as e: errors.append(str(e))
+    if errors:
+        for e in errors: print(f"[ERROR] {e}")
+        return 1
+    print("[OK] Credential diagnostics passed")
+    return 0
+if __name__=='__main__': sys.exit(main())
