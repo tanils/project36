@@ -4,8 +4,8 @@ import os
 import requests
 
 # Current Gemini REST API. Google recommends the Interactions API for new projects.
-GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 MAX_REQUESTS_PER_RUN = int(os.getenv("MAX_GEMINI_REQUESTS_PER_RUN", "3"))
 
 SYSTEM = """You are an Indian stock-market news intelligence analyst.

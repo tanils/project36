@@ -1,7 +1,9 @@
 import os
 import requests
 
-TELEGRAM_MAX_LENGTH = 4096
+# Telegram documents a 4096-character text limit. Keep a safety margin because
+# Python character count and Telegram's internal limits can differ for Unicode.
+TELEGRAM_MAX_LENGTH = 3500
 
 
 def _chat_ids(value):
@@ -11,13 +13,64 @@ def _chat_ids(value):
 
 
 def _telegram_error(response):
+    """Return Telegram's safe API error without ever exposing the bot token."""
     try:
         data = response.json()
-        desc = data.get("description") or "Unknown Telegram error"
         code = data.get("error_code", response.status_code)
+        desc = data.get("description") or "Unknown Telegram error"
         return f"HTTP {code}: {desc}"
     except Exception:
         return f"HTTP {response.status_code}: {response.text[:1000]}"
+
+
+def _api(base, method, **kwargs):
+    try:
+        response = requests.request(method, base + kwargs.pop("path"), timeout=30, **kwargs)
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Telegram network error: {exc}") from exc
+    if not response.ok:
+        raise RuntimeError(_telegram_error(response))
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise RuntimeError(f"Telegram returned non-JSON HTTP {response.status_code}") from exc
+    if not data.get("ok"):
+        raise RuntimeError(f"Telegram API error: {data.get('description', 'unknown error')}")
+    return data
+
+
+def validate_telegram(token, chat_id):
+    """Validate bot token and every configured destination before sending."""
+    token = (token or "").strip()
+    ids = _chat_ids(chat_id)
+    if not token or not ids:
+        missing = []
+        if not token:
+            missing.append("TELEGRAM_BOT_TOKEN")
+        if not ids:
+            missing.append("TELEGRAM_CHAT_ID")
+        raise RuntimeError("Telegram credentials not configured: missing " + ", ".join(missing))
+
+    base = f"https://api.telegram.org/bot{token}"
+    me = _api(base, "GET", path="/getMe")
+    bot = me.get("result", {})
+    print(f"[OK] Telegram bot: @{bot.get('username', 'unknown')}")
+
+    valid = []
+    for target in ids:
+        chat = _api(base, "POST", path="/getChat", json={"chat_id": target})
+        info = chat.get("result", {})
+        label = info.get("title") or info.get("username") or info.get("first_name") or str(target)
+        print(f"[OK] Telegram destination: {label} (id={target})")
+        valid.append(target)
+    return valid
+
+
+def _chunks(text):
+    text = text or ""
+    if not text:
+        return []
+    return [text[i:i + TELEGRAM_MAX_LENGTH] for i in range(0, len(text), TELEGRAM_MAX_LENGTH)]
 
 
 def send_telegram(token, chat_id, text):
@@ -25,25 +78,41 @@ def send_telegram(token, chat_id, text):
     ids = _chat_ids(chat_id)
     if not token or not ids:
         missing = []
-        if not token: missing.append("TELEGRAM_BOT_TOKEN")
-        if not ids: missing.append("TELEGRAM_CHAT_ID")
+        if not token:
+            missing.append("TELEGRAM_BOT_TOKEN")
+        if not ids:
+            missing.append("TELEGRAM_CHAT_ID")
         raise RuntimeError("Telegram credentials not configured: missing " + ", ".join(missing))
+    if not text:
+        print("[INFO] Telegram: empty message; nothing sent.")
+        return 0
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    chunks = [text[i:i + TELEGRAM_MAX_LENGTH] for i in range(0, len(text), TELEGRAM_MAX_LENGTH)] or [""]
-    failures = []
+    # Validate destinations first. This gives a useful error before sendMessage.
+    valid_ids = validate_telegram(token, ",".join(ids))
+    base = f"https://api.telegram.org/bot{token}"
+    chunks = _chunks(text)
     sent = 0
-    for target in ids:
-        for chunk in chunks:
-            r = requests.post(url, json={"chat_id": target, "text": chunk}, timeout=30)
-            if not r.ok:
-                failures.append(f"chat_id={target}: {_telegram_error(r)}")
+    failures = []
+
+    for target in valid_ids:
+        for index, chunk in enumerate(chunks, 1):
+            try:
+                data = _api(
+                    base,
+                    "POST",
+                    path="/sendMessage",
+                    json={
+                        "chat_id": target,
+                        "text": chunk,
+                        "disable_web_page_preview": True,
+                    },
+                )
+                sent += 1
+                print(f"[OK] Telegram sendMessage: chat={target}, chunk={index}/{len(chunks)}")
+            except Exception as exc:
+                failures.append(f"chat_id={target}, chunk={index}: {exc}")
                 break
-            data = r.json()
-            if not data.get("ok"):
-                failures.append(f"chat_id={target}: {data.get('description','Telegram returned ok=false')}")
-                break
-            sent += 1
+
     if failures:
         raise RuntimeError("; ".join(failures))
     return sent
