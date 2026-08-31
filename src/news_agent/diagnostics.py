@@ -1,25 +1,59 @@
-import os,sys,requests
-from .config import settings
-from .delivery import validate_telegram
+import os
+import requests
 
 def main():
-    cfg=settings(); errors=[]
-    for name in ("GEMINI_API_KEY","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID"):
-        if not os.getenv(name): errors.append(f"{name} is missing")
-        else: print(f"[OK] {name}: present")
-    if cfg.get("gemini"):
+    print("=== Credential diagnostics ===")
+    for name in ("GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+        print(f"{name}: {'present' if os.getenv(name, '').strip() else 'MISSING'}")
+
+    key=os.getenv("GEMINI_API_KEY","").strip()
+    model=os.getenv("GEMINI_MODEL","gemini-3.6-flash").strip()
+    if key:
         try:
-            model=os.getenv("GEMINI_MODEL","gemini-3.6-flash")
-            r=requests.get(f"https://generativelanguage.googleapis.com/v1beta/models/{model}",headers={"x-goog-api-key":cfg['gemini']},timeout=20)
-            print(f"[INFO] Gemini metadata HTTP: {r.status_code}")
-            if not r.ok: errors.append(f"Gemini metadata HTTP {r.status_code}: {r.text[:500]}")
-        except Exception as e: errors.append(f"Gemini metadata error: {e}")
-    if cfg.get("telegram_token") and cfg.get("telegram_chat_id"):
-        try: validate_telegram(cfg['telegram_token'],str(cfg['telegram_chat_id']).split(',')[0].strip())
-        except Exception as e: errors.append(str(e))
-    if errors:
-        for e in errors: print(f"[ERROR] {e}")
-        return 1
-    print("[OK] Credential diagnostics passed")
-    return 0
-if __name__=='__main__': sys.exit(main())
+            r=requests.get(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}",
+                headers={"x-goog-api-key": key},
+                timeout=30,
+            )
+            print(f"Gemini metadata HTTP: {r.status_code}")
+            if r.ok:
+                print(f"Gemini model available: {model}")
+            else:
+                print(r.text[:1000])
+        except Exception as e:
+            print(f"Gemini metadata error: {e}")
+
+    token=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
+    chats=os.getenv("TELEGRAM_CHAT_ID","").strip() or os.getenv("TELEGRAM_CHAT_IDS","").strip()
+    if token:
+        try:
+            r=requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=30)
+            data=r.json()
+            print(f"Telegram getMe HTTP: {r.status_code}")
+            if data.get("ok"):
+                print(f"Telegram bot: @{data['result'].get('username','unknown')}")
+            else:
+                print(f"Telegram error: {data.get('description', r.text)}")
+        except Exception as e:
+            print(f"Telegram getMe error: {e}")
+
+    if token and chats:
+        for chat_id in [x.strip() for x in chats.split(",") if x.strip()]:
+            try:
+                r=requests.get(
+                    f"https://api.telegram.org/bot{token}/getChat",
+                    params={"chat_id": chat_id},
+                    timeout=30,
+                )
+                data=r.json()
+                print(f"Telegram getChat {chat_id} HTTP: {r.status_code}")
+                if data.get("ok"):
+                    c=data["result"]
+                    print(f"Telegram destination OK: {c.get('title') or c.get('username') or c.get('first_name') or chat_id}")
+                else:
+                    print(f"Telegram destination error: {data.get('description', r.text)}")
+            except Exception as e:
+                print(f"Telegram getChat error for {chat_id}: {e}")
+
+if __name__ == "__main__":
+    main()

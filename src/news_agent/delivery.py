@@ -1,44 +1,115 @@
+import os
 import requests
+from typing import Iterable, List
 
-MAX_TELEGRAM_TEXT=3500
+API = "https://api.telegram.org"
 
-def _api(token,method,**kwargs):
-    r=requests.post(f"https://api.telegram.org/bot{token}/{method}",timeout=20,**kwargs)
-    try: data=r.json()
-    except Exception: data={"ok":False,"description":r.text[:1000]}
+def _token():
+    return os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+def _chat_ids() -> List[str]:
+    raw = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    # Backward compatibility, but prefer singular variable.
+    if not raw:
+        raw = os.getenv("TELEGRAM_CHAT_IDS", "").strip()
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+def telegram_get(method: str, params=None):
+    token = _token()
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is missing")
+    r = requests.get(f"{API}/bot{token}/{method}", params=params or {}, timeout=30)
+    try:
+        data = r.json()
+    except Exception:
+        data = {"ok": False, "error_code": r.status_code, "description": r.text}
     if not r.ok or not data.get("ok"):
-        raise RuntimeError(f"Telegram API HTTP {r.status_code}: {data.get('description',r.text[:1000])}")
+        raise RuntimeError(
+            f"Telegram API HTTP {r.status_code}: "
+            f"{data.get('description', r.text)}"
+        )
     return data
 
-def validate_telegram(token,chat_id):
-    if not token or not chat_id: raise RuntimeError("missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
-    me=_api(token,"getMe")
-    chat=_api(token,"getChat",params={"chat_id":chat_id})
-    print(f"[OK] Telegram bot: @{me['result'].get('username','unknown')}")
-    print(f"[OK] Telegram destination: {chat['result'].get('title') or chat['result'].get('username') or chat['result'].get('id')}")
-    return True
+def validate_telegram() -> bool:
+    token = _token()
+    ids = _chat_ids()
+    if not token:
+        print("[ERROR] TELEGRAM_BOT_TOKEN is missing")
+        return False
+    if not ids:
+        print("[ERROR] TELEGRAM_CHAT_ID is missing")
+        return False
 
-def _chunks(text):
-    while len(text)>MAX_TELEGRAM_TEXT:
-        cut=text.rfind("\n",0,MAX_TELEGRAM_TEXT)
-        if cut<1000: cut=MAX_TELEGRAM_TEXT
-        yield text[:cut]; text=text[cut:].lstrip()
-    if text: yield text
-
-def send_telegram(token,chat_id,text):
-    token=(token or '').strip(); chat_id=(chat_id or '').strip()
-    if not token or not chat_id: raise RuntimeError("Telegram credentials not configured: missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
-    for part in _chunks(text):
-        data=_api(token,"sendMessage",json={"chat_id":chat_id,"text":part,"disable_web_page_preview":True})
-        print(f"[OK] Telegram delivered message_id={data['result'].get('message_id')}")
-
-def deliver(text,cfg):
-    if not text: print("[INFO] No qualifying new events; nothing sent."); return False
-    if not cfg.get("enable_telegram",True): print("[INFO] Telegram disabled."); return False
     try:
-        ids=[x.strip() for x in str(cfg.get('telegram_chat_id','')).split(',') if x.strip()]
-        if not ids: raise RuntimeError("TELEGRAM_CHAT_ID is empty")
-        for cid in ids: send_telegram(cfg['telegram_token'],cid,text)
-        return True
-    except Exception as exc:
-        print(f"[ERROR] Telegram failed: {exc}"); return False
+        me = telegram_get("getMe")
+        print(f"[OK] Telegram bot: @{me['result'].get('username', 'unknown')}")
+    except Exception as e:
+        print(f"[ERROR] Telegram getMe failed: {e}")
+        return False
+
+    ok = True
+    for chat_id in ids:
+        try:
+            chat = telegram_get("getChat", {"chat_id": chat_id})
+            title = chat["result"].get("title") or chat["result"].get("username") or chat["result"].get("first_name") or chat_id
+            print(f"[OK] Telegram destination {chat_id}: {title}")
+        except Exception as e:
+            print(f"[ERROR] Telegram destination {chat_id} failed: {e}")
+            ok = False
+    return ok
+
+def _chunks(text: str, limit: int = 3500) -> Iterable[str]:
+    text = text or ""
+    while len(text) > limit:
+        cut = text.rfind("\n", 0, limit)
+        if cut < 1000:
+            cut = limit
+        yield text[:cut]
+        text = text[cut:].lstrip("\n")
+    if text:
+        yield text
+
+def send_message(text: str) -> bool:
+    token = _token()
+    ids = _chat_ids()
+    if not token or not ids:
+        print("[ERROR] Telegram credentials are not configured")
+        return False
+
+    success = True
+    for chat_id in ids:
+        for part_no, chunk in enumerate(_chunks(text), 1):
+            payload = {
+                "chat_id": chat_id,
+                "text": chunk,
+                "disable_web_page_preview": True,
+            }
+            try:
+                r = requests.post(
+                    f"{API}/bot{token}/sendMessage",
+                    json=payload,
+                    timeout=30,
+                )
+                try:
+                    data = r.json()
+                except Exception:
+                    data = {"ok": False, "description": r.text}
+                if not r.ok or not data.get("ok"):
+                    print(
+                        f"[ERROR] Telegram sendMessage failed for {chat_id}: "
+                        f"HTTP {r.status_code}: {data.get('description', r.text)}"
+                    )
+                    success = False
+                else:
+                    print(f"[OK] Telegram message sent to {chat_id} (part {part_no})")
+            except requests.RequestException as e:
+                print(f"[ERROR] Telegram network error for {chat_id}: {e}")
+                success = False
+    return success
+
+# Compatibility names used by older project code.
+def send_telegram(text: str) -> bool:
+    return send_message(text)
+
+def deliver(text: str) -> bool:
+    return send_message(text)
