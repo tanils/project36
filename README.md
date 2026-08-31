@@ -170,3 +170,7 @@ If Gemini returns `401 ACCESS_TOKEN_TYPE_UNSUPPORTED` even though the key is pre
 ## GitHub Actions
 
 The workflow is in `.github/workflows/market-news.yml` and runs at 08:00, 13:00, 14:00, 15:00 and 20:00 IST on weekdays. Add `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` as GitHub Actions repository secrets. Gemini is capped at 3 generation requests per workflow run by default so the five scheduled runs use at most 15 generation requests/day, leaving headroom under a 20-request free-tier daily quota. The workflow validates Gemini model metadata and Telegram with non-message checks before running the agent.
+
+
+## Telegram troubleshooting
+The workflow validates both the bot token and TELEGRAM_CHAT_ID using Telegram getChat before running. The sender reports Telegram's exact safe error description and splits messages at Telegram's 4096-character text limit.

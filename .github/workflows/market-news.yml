@@ -86,18 +86,28 @@ jobs:
           print('generateContent: supported')
           PY
 
-      - name: Validate Telegram bot without sending a message
+      - name: Validate Telegram bot and destination
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python - <<'PY'
           import os, requests
-          r = requests.get(f"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/getMe", timeout=30)
-          print(f'Telegram getMe HTTP: {r.status_code}')
+          token = os.environ['TELEGRAM_BOT_TOKEN']
+          chat_id = os.environ['TELEGRAM_CHAT_ID'].strip()
+          base = f"https://api.telegram.org/bot{token}"
+          r = requests.get(f"{base}/getMe", timeout=30)
+          print(f"Telegram getMe HTTP: {r.status_code}")
           if not r.ok:
-              print(r.text[:2000])
-              raise SystemExit(1)
+              print(r.text[:2000]); raise SystemExit(1)
           print(f"Telegram bot: @{r.json()['result'].get('username', 'unknown')}")
+          r = requests.post(f"{base}/getChat", json={"chat_id": chat_id}, timeout=30)
+          print(f"Telegram getChat HTTP: {r.status_code}")
+          if not r.ok:
+              # Safe: Telegram response contains description, never the bot token.
+              print(r.text[:2000]); raise SystemExit(1)
+          chat = r.json().get('result', {})
+          print(f"Telegram destination OK: {chat.get('title') or chat.get('username') or chat.get('first_name') or chat.get('id')}")
           PY
 
       - name: Run market news agent
