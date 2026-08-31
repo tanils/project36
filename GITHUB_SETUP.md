@@ -1,14 +1,19 @@
-# GitHub Actions setup
+# GitHub Actions setup — v6
 
-Repository Secrets (exact names):
+Required GitHub repository secrets (exact names):
 - GEMINI_API_KEY
 - TELEGRAM_BOT_TOKEN
 - TELEGRAM_CHAT_ID
 
-The workflow uses GEMINI_MODEL=gemini-3.6-flash by default.
+Recommended environment:
+- GEMINI_MODEL=gemini-3.6-flash
+- MAX_GEMINI_REQUESTS_PER_RUN=3
 
-Telegram diagnostics run getMe and getChat before the agent. The workflow never prints secret values.
+Telegram diagnostics call getMe and getChat. The application sends plain-text
+Telegram messages (no Markdown/HTML parsing), splits long messages, and prints
+Telegram's API `description` on failures.
 
-If Telegram sendMessage fails, the log prints Telegram's API `description` instead of only `400 Client Error`.
+Gemini diagnostics use GET model metadata only; they do not consume a
+generateContent request. HTTP 429 and 503 stop further Gemini calls for that run.
 
-Gemini 429/503 are handled without repeated retries; the quantitative pipeline continues.
+The workflow exits non-zero if Telegram delivery fails, so the failure is visible.

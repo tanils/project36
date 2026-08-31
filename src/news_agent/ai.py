@@ -4,7 +4,7 @@ import os
 import time
 import requests
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
+DEFAULT_MODEL = "gemini-3.6-flash"
 MAX_REQUESTS = max(0, int(os.getenv("MAX_GEMINI_REQUESTS_PER_RUN", "3")))
 _REQUEST_COUNT = 0
 _STOP_REASON = None
@@ -37,7 +37,8 @@ def _generate(api_key,prompt):
         raise RuntimeError(_STOP_REASON)
     key=_clean_api_key(api_key)
     if not key: raise RuntimeError("Gemini API key is empty")
-    url=f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
+    model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.2,"responseMimeType":"application/json","responseSchema":{"type":"OBJECT","properties":{"impact_score":{"type":"INTEGER"},"trading_relevance":{"type":"INTEGER"},"confidence":{"type":"INTEGER"},"direction":{"type":"STRING"},"horizon":{"type":"STRING"},"category":{"type":"STRING"},"affected_stocks":{"type":"ARRAY","items":{"type":"STRING"}},"affected_sectors":{"type":"ARRAY","items":{"type":"STRING"}},"status":{"type":"STRING"},"why_it_matters":{"type":"STRING"}},"required":["impact_score","trading_relevance","confidence","direction","horizon","category","affected_stocks","affected_sectors","status","why_it_matters"]}}}
     _REQUEST_COUNT += 1
     r=requests.post(url,headers={"Content-Type":"application/json","x-goog-api-key":key},json=payload,timeout=60)

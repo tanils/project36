@@ -38,6 +38,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GEMINI_MODEL: gemini-3.6-flash
           MAX_GEMINI_REQUESTS_PER_RUN: 3
+          ENABLE_GEMINI: true
+          ENABLE_TELEGRAM: true
         run: python -m src.news_agent.diagnostics
 
       - name: Run market news agent
@@ -47,6 +49,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GEMINI_MODEL: gemini-3.6-flash
           MAX_GEMINI_REQUESTS_PER_RUN: 3
+          ENABLE_GEMINI: true
+          ENABLE_TELEGRAM: true
+          MAX_ALERTS: 10
+          MIN_IMPACT_SCORE: 70
+          MIN_TRADING_RELEVANCE: 65
         run: |
           if [ -n "${{ github.event.inputs.slot }}" ]; then
             SLOT="${{ github.event.inputs.slot }}"
