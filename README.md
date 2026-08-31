@@ -149,7 +149,7 @@ The agent is an information-ranking system, not an investment adviser. Scores ar
 
 This version sends `GEMINI_API_KEY` explicitly using Google's `x-goog-api-key`
 header. It does not use OAuth bearer authentication. The Gemini model can be
-overridden with `GEMINI_MODEL` (default: `gemini-3.7-flash`).
+overridden with `GEMINI_MODEL` (default: `gemini-3.6-flash`).
 
 The GitHub Actions workflow also prints only whether the three required secrets
 are present; it never prints their values.
@@ -166,3 +166,7 @@ python -m src.news_agent.diagnostics
 ```
 
 If Gemini returns `401 ACCESS_TOKEN_TYPE_UNSUPPORTED` even though the key is present, create a fresh Gemini API key in Google AI Studio and replace the GitHub `GEMINI_API_KEY` secret. Do not use an OAuth access token or add `Bearer ` to the secret.
+
+## GitHub Actions
+
+The workflow is in `.github/workflows/market-news.yml` and runs at 08:00, 13:00, 14:00, 15:00 and 20:00 IST on weekdays. Add `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` as GitHub Actions repository secrets. Gemini is capped at 3 generation requests per workflow run by default so the five scheduled runs use at most 15 generation requests/day, leaving headroom under a 20-request free-tier daily quota. The workflow validates Gemini model metadata and Telegram with non-message checks before running the agent.

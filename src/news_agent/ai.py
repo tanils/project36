@@ -4,8 +4,9 @@ import os
 import requests
 
 # Current Gemini REST API. Google recommends the Interactions API for new projects.
-GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions"
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+MAX_REQUESTS_PER_RUN = int(os.getenv("MAX_GEMINI_REQUESTS_PER_RUN", "3"))
 
 SYSTEM = """You are an Indian stock-market news intelligence analyst.
 Rank events for a short-term trader. Do not give generic summaries.
@@ -51,6 +52,8 @@ def _generate(api_key, prompt):
     if not key:
         raise RuntimeError("Gemini API key is empty")
 
+    # Confirmed working endpoint/model: generateContent + x-goog-api-key.
+    # Do NOT send Interactions API fields such as `input` or `response_format`.
     response = requests.post(
         GEMINI_ENDPOINT,
         headers={
@@ -58,50 +61,48 @@ def _generate(api_key, prompt):
             "x-goog-api-key": key,
         },
         json={
-            "model": MODEL,
-            "input": prompt,
-            "response_format": {
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": {
-                    "type": "object",
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.2,
+                "responseMimeType": "application/json",
+                "responseSchema": {
+                    "type": "OBJECT",
                     "properties": {
-                        "impact_score": {"type": "integer"},
-                        "trading_relevance": {"type": "integer"},
-                        "confidence": {"type": "integer"},
-                        "direction": {"type": "string"},
-                        "horizon": {"type": "string"},
-                        "category": {"type": "string"},
-                        "affected_stocks": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
-                        "affected_sectors": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
-                        "status": {"type": "string"},
-                        "why_it_matters": {"type": "string"}
+                        "impact_score": {"type": "INTEGER"},
+                        "trading_relevance": {"type": "INTEGER"},
+                        "confidence": {"type": "INTEGER"},
+                        "direction": {"type": "STRING"},
+                        "horizon": {"type": "STRING"},
+                        "category": {"type": "STRING"},
+                        "affected_stocks": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "affected_sectors": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "status": {"type": "STRING"},
+                        "why_it_matters": {"type": "STRING"}
                     },
                     "required": [
                         "impact_score", "trading_relevance", "confidence",
                         "direction", "horizon", "category",
-                        "affected_stocks", "affected_sectors",
-                        "status", "why_it_matters"
+                        "affected_stocks", "affected_sectors", "status",
+                        "why_it_matters"
                     ]
                 }
-            },
+            }
         },
         timeout=60,
     )
 
     if not response.ok:
         raise RuntimeError(
-            f"Gemini API HTTP {response.status_code}: {response.text[:1200]}"
+            f"Gemini API HTTP {response.status_code}: {response.text[:2000]}"
         )
 
-    return _extract_text(response.json())
-
+    data = response.json()
+    try:
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError, TypeError):
+        raise RuntimeError(f"Gemini response did not contain text: {json.dumps(data)[:1500]}")
 
 def test_gemini(api_key):
     """Make one tiny authenticated request for setup verification."""
@@ -118,7 +119,12 @@ def enrich(events, api_key, company_map):
         print("[INFO] Gemini disabled: GEMINI_API_KEY is empty.")
         return events
 
+    request_count = 0
     for e in events:
+        if request_count >= MAX_REQUESTS_PER_RUN:
+            print(f"[INFO] Gemini request cap reached ({MAX_REQUESTS_PER_RUN}); remaining events use rule-based scores.")
+            break
+
         payload = {
             "title": e.title,
             "summary": e.summary,
@@ -132,6 +138,7 @@ def enrich(events, api_key, company_map):
                 api_key,
                 SYSTEM + "\n\nAnalyze:\n" + json.dumps(payload, ensure_ascii=False),
             )
+            request_count += 1
             d = json.loads(text)
             e.impact_score = int(d.get("impact_score", e.impact_score))
             e.trading_relevance = int(d.get("trading_relevance", e.trading_relevance))
@@ -144,5 +151,12 @@ def enrich(events, api_key, company_map):
             e.status = d.get("status", e.status)
             e.why_it_matters = d.get("why_it_matters", e.why_it_matters)
         except Exception as exc:
-            print(f"[WARN] Gemini enrichment failed: {exc}")
+            msg = str(exc)
+            print(f"[WARN] Gemini enrichment failed: {msg}")
+            if "HTTP 429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                print("[WARN] Gemini quota exhausted; stopping further Gemini calls for this run.")
+                break
+            if "HTTP 503" in msg or "UNAVAILABLE" in msg:
+                print("[WARN] Gemini temporarily unavailable; stopping further Gemini calls for this run.")
+                break
     return events
